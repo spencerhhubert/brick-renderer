@@ -31,17 +31,26 @@ def cut_path(path):
 def name(path):
 	return cut_ext(cut_path(path));
 
-def ignore(path, keep_variations, keep_assemblies):
-	# need to ignore if path==dir
-	if os.path.isdir(path):
-		return True;
+def fullname(path):	
 	with open(path) as f:
 		info = f.readlines()[0];
-		# ignore "needs work" (~) or symbolic link (=)
-		if info[2]=='=' or info[2]=='~':
-			return True;
+	f.close();
+	return info;
+
+def ignore(path, keep_variations, keep_assemblies):
+	if os.path.isdir(path):
+		return True;
+	ignore_words = ["Electric", "Minifig", "Train", "Constraction",
+			"Duplo", "Bracelet", "Figure", "Sticker", "Sheet",
+			"Quatro", "Fabuland", "Baseplate", "Scala"];
+	if fullname(path).split()[1] in ignore_words:
+		return True;
+	# ignore "needs work" (~) or symbolic link (=)
+	info = fullname(path);
+	if info[2]=='=' or info[2]=='~':
+		return True;
 	part = name(path);
-	if re.search("^[stu]", part):
+	if re.search("^[stum]", part):
 		# ignore sticker, third-party, and unknown
 		return True;
 	if re.search("[p]", part):
@@ -134,7 +143,7 @@ for part in parts:
 	if ignore(path+part, False, True):
 		continue;
 	remainder += 1;
-	print(cut_ext(part));
+	print(f"{cut_ext(part)} - {fullname(path+part)[:-2]}");
 
 print(f"total: {len(parts)}");
 print(f"remainder: {remainder}");
