@@ -48,22 +48,27 @@ def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
     def deselect():
         bpy.ops.object.select_all(action="DESELECT")
         
-    def makePiece(piece:tuple, where):
+    def makePiece(piece:tuple, where:tuple):
         kind_id, color, dat_path = piece
         
+        #messiness here deals with imports of >1 of the same piece kind
+        before_import = set(obj.name for obj in bpy.data.objects)
         bpy.ops.import_scene.importldraw(filepath=dat_path)
+        after_import = set(obj.name for obj in bpy.data.objects)
+        new_objs = after_import - before_import
+        piece = None
+        for obj_name in new_objs:
+            obj = bpy.data.objects[obj_name]
+            if obj_name == "LegoGroundPlane":
+                obj.select_set(True)
+                bpy.ops.object.delete()
+            else:
+                piece = obj
 
-        modeObj()
-        deselect()
-        bpy.data.objects["LegoGroundPlane"].select_set(True)
-        bpy.ops.object.delete()
-        
-        piece = bpy.data.objects[f"00000_{os.path.basename(dat_path)}"]
-
-        #set random initial state for piece
-        init_loc = (random.uniform(-1, 1), random.uniform(-1,1), 5)
-        init_rot = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1))
-        piece.location = init_loc
+        init_rot = (random.uniform(0, 2*pi), random.uniform(0, 2*pi), random.uniform(0, 2*pi))
+        init_rot = (0,0,0)
+        print("where", where)
+        piece.location = where
         piece.rotation_euler = init_rot
         
         #make piece a rigid body for physics sim
@@ -120,10 +125,12 @@ def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
     planes[2].rotation_euler = (pi/2,0,pi/2)
     planes[3].rotation_euler = (pi/2,0,pi/2)
     
-    planes[0].location[1] += img_plane.dimensions[1]/2
-    planes[1].location[1] -= img_plane.dimensions[1]/2
-    planes[2].location[0] += img_plane.dimensions[0]/2
-    planes[3].location[0] -= img_plane.dimensions[0]/2
+    range_x = img_plane.dimensions[0]/2
+    range_y = img_plane.dimensions[1]/2
+    planes[0].location[1] += range_y
+    planes[1].location[1] -= range_y
+    planes[2].location[0] += range_x
+    planes[3].location[0] -= range_x
 
     #set up camera
     cam_pos = pos[:-3]
@@ -148,9 +155,10 @@ def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
     looking_at = Vector((0.0, 0.0, 0.0))
     direc = looking_at - cam.location
     light.rotation_euler = direc.to_track_quat('-Z', 'Y').to_euler()
-    
+
     for piece in pieces:
-        makePiece(piece, None)
+        init_loc = (random.uniform(-range_x, range_x), random.uniform(-range_y,range_y), 2)
+        makePiece(piece, where=init_loc)
         
     #print(f"Initial position: {piece.location}")
     #physics sim needs to set through every frame no matter what
