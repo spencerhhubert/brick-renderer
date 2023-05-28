@@ -17,6 +17,7 @@ ldraw_dir = "ldraw/parts/"
 ldraw_kinds = list(map(lambda x: x[:-4],os.listdir(ldraw_dir)))
 out_dir = "renders/"
 bg_imgs_dir = "bg_imgs/"
+px_per_mm = 10 #for bg img
 pos = (0,10,10,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
 
 def whatToRender() -> list:
@@ -38,20 +39,6 @@ def whatToRender() -> list:
 def randomColorCodes(num:int) -> list:
     c.execute("SELECT code FROM colors ORDER BY RANDOM() LIMIT ?", (num,))
     return [i[0] for i in c.fetchall()]
-
-import os
-import random
-import time
-import bpy
-from mathutils import Vector
-from PIL import Image
-
-ldraw_dir = "ldraw/parts/"
-#ldraw_kinds = list(map(lambda x: x[:-4],os.listdir(ldraw_dir)))
-out_dir = "renders/"
-bg_imgs_dir = "bg_imgs/"
-px_per_mm = 10 #for bg img
-pos = (0,10,10,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
 
 def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, out_path:str):
     def modeObj():
