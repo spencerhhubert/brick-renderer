@@ -51,27 +51,6 @@ def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, 
     modeObj()
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete()
-
-    bpy.ops.import_scene.importldraw(filepath=dat_path)
-
-    modeObj()
-    deselect()
-    bpy.data.objects["LegoGroundPlane"].select_set(True)
-    bpy.ops.object.delete()
-    
-    piece = bpy.data.objects[f"00000_{os.path.basename(dat_path)}"]
-
-    #set random initial state for piece
-    init_loc = (random.uniform(-1, 1), random.uniform(-1,1), 10)
-    init_rot = (random.uniform(0, 2*pi), random.uniform(0, 2*pi), random.uniform(0, 2*pi))
-    piece.location = init_loc
-    piece.rotation_euler = init_rot
-    
-    #make piece a rigid body for physics sim
-    deselect()
-    piece.select_set(True)
-    bpy.context.view_layer.objects.active = piece
-    bpy.ops.rigidbody.object_add()
     
     #import background image and scale by cm per pixel
     deselect()
@@ -91,21 +70,36 @@ def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, 
     mm_per_bu = 1000 #blender units
     new_w = img_w / px_per_mm / mm_per_bu
     new_h = img_h / px_per_mm / mm_per_bu
-    print(new_w)
-    print(piece.dimensions*1000)
     img_plane.scale.x = new_w/2
     img_plane.scale.y = new_h/2
     img_plane.scale *= 25 #the bricks are 25x too big but physics is wrong if you scale them down 
     
-    print(f"Initial position: {piece.location}")
-    #physics sim needs to set through every frame no matter what
-    #this loop avoids using regular playback in favor of just getting
-    #to the last frame asap
-    bpy.context.scene.frame_end = 75
-    for frame in range(1, 75+1):
-        bpy.context.scene.frame_set(frame)
-    print(f"Final position: {piece.matrix_world.translation}")
+    planes = []
+    for i in range(4):
+        deselect()
+        bpy.ops.mesh.primitive_plane_add(location=(0, 0, 0))
+        plane = bpy.context.object
+        dim = max(img_plane.dimensions[0], img_plane.dimensions[1])
+        plane.scale = (dim,10,1)
+        plane.select_set(True)
+        bpy.ops.rigidbody.object_add()
+        plane.rigid_body.type = "PASSIVE"
+        plane.rigid_body.collision_shape = "MESH"
+        #make invisible in render
+        plane.hide_render = True
+        plane.hide_viewport = True
+        planes.append(plane)
+        
+    planes[0].rotation_euler = (pi/2,0,0)
+    planes[1].rotation_euler = (pi/2,0,0)
+    planes[2].rotation_euler = (pi/2,0,pi/2)
+    planes[3].rotation_euler = (pi/2,0,pi/2)
     
+    planes[0].location[1] += img_plane.dimensions[1]/2
+    planes[1].location[1] -= img_plane.dimensions[1]/2
+    planes[2].location[0] += img_plane.dimensions[0]/2
+    planes[3].location[0] -= img_plane.dimensions[0]/2
+
     #set up camera
     cam_pos = pos[:-3]
     cam_rot = pos[3:]
@@ -129,13 +123,39 @@ def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, 
     looking_at = Vector((0.0, 0.0, 0.0))
     direc = looking_at - cam.location
     light.rotation_euler = direc.to_track_quat('-Z', 'Y').to_euler()
+
+    #import lego piece
+    bpy.ops.import_scene.importldraw(filepath=dat_path)
+
+    modeObj()
+    deselect()
+    bpy.data.objects["LegoGroundPlane"].select_set(True)
+    bpy.ops.object.delete()
+    
+    piece = bpy.data.objects[f"00000_{os.path.basename(dat_path)}"]
+
+    #set random initial state for piece
+    init_loc = (random.uniform(-1, 1), random.uniform(-1,1), 5)
+    init_rot = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1))
+    piece.location = init_loc
+    piece.rotation_euler = init_rot
+    
+    #make piece a rigid body for physics sim
+    deselect()
+    piece.select_set(True)
+    bpy.context.view_layer.objects.active = piece
+    bpy.ops.rigidbody.object_add()
+        
+    print(f"Initial position: {piece.location}")
+    #physics sim needs to set through every frame no matter what
+    #this loop avoids using regular playback in favor of just getting
+    #to the last frame asap
+    bpy.context.scene.frame_end = 75
+    list(map(bpy.context.scene.frame_set, range(1, 75+1)))
+    print(f"Final position: {piece.matrix_world.translation}")
     
     return
-
         
-renderOne("3001", "0", os.path.join(ldraw_dir,"3001.dat"),
-        os.path.join(bg_imgs_dir,"bg1.jpg"), pos, out_dir)
-
 def massRender(imgs_per:int):
     kinds = whatToRender()
     bg_imgs = list(map(lambda x: os.path.join(bg_imgs_dir,x), os.listdir(bg_imgs_dir)))
@@ -145,5 +165,6 @@ def massRender(imgs_per:int):
             bg_img_path = random.choice(bg_imgs)
             renderOne(kind[0], color, kind[1], bg_img_path, pos, kind[2])
 
-renderOne("3005", "0", os.path.join(ldraw_dir,"3005.dat"),
-          os.path.join(bg_imgs_dir,"bg1.jpg"), pos, out_dir)
+renderOne("3001", "0", os.path.join(ldraw_dir,"3001.dat"),
+        os.path.join(bg_imgs_dir,"bg1.jpg"), pos, out_dir)
+
