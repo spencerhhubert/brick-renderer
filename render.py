@@ -60,10 +60,10 @@ def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, 
     bpy.ops.object.delete()
     
     piece = bpy.data.objects[f"00000_{os.path.basename(dat_path)}"]
-    
+
     #set random initial state for piece
-    init_loc = (random.uniform(-1, 1), random.uniform(-1,1), 5)
-    init_rot = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1))
+    init_loc = (random.uniform(-1, 1), random.uniform(-1,1), 10)
+    init_rot = (random.uniform(0, 2*pi), random.uniform(0, 2*pi), random.uniform(0, 2*pi))
     piece.location = init_loc
     piece.rotation_euler = init_rot
     
@@ -73,22 +73,29 @@ def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, 
     bpy.context.view_layer.objects.active = piece
     bpy.ops.rigidbody.object_add()
     
-    #for some reason, imported piece is not scaled right. 25x too big
-    #piece.scale = (scale,)*3
-    #piece.rigid_body.mass *= 1
-    
-    #make ground
+    #import background image and scale by cm per pixel
     deselect()
-    bpy.ops.mesh.primitive_plane_add(size=10, location=(0, 0, 0))
-    ground = bpy.context.object
-    deselect()
-    ground.select_set(True)
-    bpy.context.view_layer.objects.active = ground
+    bpy.ops.import_image.to_plane(files=[{"name":os.path.basename(bg_img_path)}],
+                                    directory=os.path.dirname(bg_img_path), align_axis='Z+',
+                                    relative=False)
+    img_plane = bpy.context.active_object
+    img_plane.select_set(True)
+    bpy.context.view_layer.objects.active = img_plane
     bpy.ops.rigidbody.object_add()
-    ground.rigid_body.type = "PASSIVE"
-    #make ground invisible
-    ground.hide_viewport = True
+    img_plane.rigid_body.type = "PASSIVE"
     deselect()
+    
+    #scale img according to size of piece
+    img = Image.open(bg_img_path)
+    img_w, img_h = img.size
+    mm_per_bu = 1000 #blender units
+    new_w = img_w / px_per_mm / mm_per_bu
+    new_h = img_h / px_per_mm / mm_per_bu
+    print(new_w)
+    print(piece.dimensions*1000)
+    img_plane.scale.x = new_w/2
+    img_plane.scale.y = new_h/2
+    img_plane.scale *= 25 #the bricks are 25x too big but physics is wrong if you scale them down 
     
     print(f"Initial position: {piece.location}")
     #physics sim needs to set through every frame no matter what
@@ -113,25 +120,18 @@ def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, 
     #cam specs
     cam.data.lens = 35
     cam.data.sensor_width = 36
-
-    #import background image and scale by cm per pixel
+    
+    #lights
     deselect()
-    bpy.ops.import_image.to_plane(files=[{"name":os.path.basename(bg_img_path)}],
-                                  directory=os.path.dirname(bg_img_path), align_axis='Z+',
-                                  relative=False)
-    img_plane = bpy.context.active_object
-    img = Image.open(bg_img_path)
-    img_w, img_h = img.size
-    mm_per_bu = 1000 #blender units
-    new_w = img_w / px_per_mm / mm_per_bu
-    new_h = img_h / px_per_mm / mm_per_bu
-    print(new_w)
-    print(piece.dimensions*1000)
-    img_plane.scale.x = new_w/2
-    img_plane.scale.y = new_h/2
-    img_plane.scale *= 25
+    bpy.ops.object.light_add(type="POINT", location=cam_pos)
+    light = bpy.context.object
+    light.data.energy = 1000
+    looking_at = Vector((0.0, 0.0, 0.0))
+    direc = looking_at - cam.location
+    light.rotation_euler = direc.to_track_quat('-Z', 'Y').to_euler()
     
     return
+
         
 renderOne("3001", "0", os.path.join(ldraw_dir,"3001.dat"),
         os.path.join(bg_imgs_dir,"bg1.jpg"), pos, out_dir)
