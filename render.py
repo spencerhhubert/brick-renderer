@@ -18,7 +18,7 @@ ldraw_kinds = list(map(lambda x: x[:-4],os.listdir(ldraw_dir)))
 out_dir = "renders/"
 bg_imgs_dir = "bg_imgs/"
 px_per_mm = 10 #for bg img
-pos = (0,10,10,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
+pos = (0,5,5,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
 
 def whatToRender() -> list:
     outs = []
@@ -40,12 +40,37 @@ def randomColorCodes(num:int) -> list:
     c.execute("SELECT code FROM colors ORDER BY RANDOM() LIMIT ?", (num,))
     return [i[0] for i in c.fetchall()]
 
-def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, out_path:str):
+def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
+    
     def modeObj():
         if bpy.context.object.mode == "EDIT":
             bpy.ops.object.mode_set(mode="OBJECT")
     def deselect():
         bpy.ops.object.select_all(action="DESELECT")
+        
+    def makePiece(piece:tuple, where):
+        kind_id, color, dat_path = piece
+        
+        bpy.ops.import_scene.importldraw(filepath=dat_path)
+
+        modeObj()
+        deselect()
+        bpy.data.objects["LegoGroundPlane"].select_set(True)
+        bpy.ops.object.delete()
+        
+        piece = bpy.data.objects[f"00000_{os.path.basename(dat_path)}"]
+
+        #set random initial state for piece
+        init_loc = (random.uniform(-1, 1), random.uniform(-1,1), 5)
+        init_rot = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1))
+        piece.location = init_loc
+        piece.rotation_euler = init_rot
+        
+        #make piece a rigid body for physics sim
+        deselect()
+        piece.select_set(True)
+        bpy.context.view_layer.objects.active = piece
+        bpy.ops.rigidbody.object_add()
 
     #delete everything in the scene
     modeObj()
@@ -123,39 +148,26 @@ def renderOne(kind_id:str, color:str, dat_path:str, bg_img_path:str, pos:tuple, 
     looking_at = Vector((0.0, 0.0, 0.0))
     direc = looking_at - cam.location
     light.rotation_euler = direc.to_track_quat('-Z', 'Y').to_euler()
-
-    #import lego piece
-    bpy.ops.import_scene.importldraw(filepath=dat_path)
-
-    modeObj()
-    deselect()
-    bpy.data.objects["LegoGroundPlane"].select_set(True)
-    bpy.ops.object.delete()
     
-    piece = bpy.data.objects[f"00000_{os.path.basename(dat_path)}"]
-
-    #set random initial state for piece
-    init_loc = (random.uniform(-1, 1), random.uniform(-1,1), 5)
-    init_rot = (random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1))
-    piece.location = init_loc
-    piece.rotation_euler = init_rot
-    
-    #make piece a rigid body for physics sim
-    deselect()
-    piece.select_set(True)
-    bpy.context.view_layer.objects.active = piece
-    bpy.ops.rigidbody.object_add()
+    for piece in pieces:
+        makePiece(piece, None)
         
-    print(f"Initial position: {piece.location}")
+    #print(f"Initial position: {piece.location}")
     #physics sim needs to set through every frame no matter what
     #this loop avoids using regular playback in favor of just getting
     #to the last frame asap
     bpy.context.scene.frame_end = 75
     list(map(bpy.context.scene.frame_set, range(1, 75+1)))
-    print(f"Final position: {piece.matrix_world.translation}")
+    #print(f"Final position: {piece.matrix_world.translation}")
     
     return
-        
+
+ids = ["3001", "3002", "3003", "3004", "3005"]
+pieces = [("3001", "0", os.path.join(ldraw_dir,"3001.dat")), ("3005", "0", os.path.join(ldraw_dir,"3005.dat"))]
+pieces = [(id, "0", os.path.join(ldraw_dir, f"{id}.dat")) for id in ids]
+
+renderOneImg(pieces, os.path.join(bg_imgs_dir,"bg2.jpg"), pos, out_dir)
+       
 def massRender(imgs_per:int):
     kinds = whatToRender()
     bg_imgs = list(map(lambda x: os.path.join(bg_imgs_dir,x), os.listdir(bg_imgs_dir)))
@@ -163,8 +175,4 @@ def massRender(imgs_per:int):
         for i in range(imgs_per):
             color = randomColorCodes(1)[0]
             bg_img_path = random.choice(bg_imgs)
-            renderOne(kind[0], color, kind[1], bg_img_path, pos, kind[2])
-
-renderOne("3001", "0", os.path.join(ldraw_dir,"3001.dat"),
-        os.path.join(bg_imgs_dir,"bg1.jpg"), pos, out_dir)
-
+            #renderOneImg(kind[0], color, kind[1], bg_img_path, pos, kind[2])
