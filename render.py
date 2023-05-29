@@ -19,8 +19,8 @@ ldraw_dir = "ldraw/parts/"
 ldraw_kinds = list(map(lambda x: x[:-4],os.listdir(ldraw_dir)))
 out_dir = "renders/"
 bg_imgs_dir = "bg_imgs/"
-px_per_mm = 10 #for bg img
-pos = (0,5,5,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
+px_per_mm = 14 #for bg img
+pos = (0,3,3,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
 
 temp_dir = "tmp"
 if not os.path.exists(temp_dir):
@@ -72,12 +72,10 @@ def whatToRender() -> list:
         piece = makePiece(row)
         if piece is not None:
             out.append(piece)
-        if i == 5:
-            break
     return out
 
 #output is files written to temp_dir
-def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
+def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple, export=True):
     def modeObj():
         if bpy.context.object.mode == "EDIT":
             bpy.ops.object.mode_set(mode="OBJECT")
@@ -243,12 +241,14 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
             os.makedirs(os.path.join(temp_dir, "masks"))
         bpy.context.scene.render.image_settings.file_format = "JPEG"
         bpy.context.scene.render.filepath=os.path.join(temp_dir, "masks", f"{piece['ml_id']}.jpg")
-        bpy.ops.render.render(write_still=True)
+        if export:
+            bpy.ops.render.render(write_still=True)
     
     show(img_plane)
     list(map(show, pieces))
     bpy.context.scene.render.filepath=os.path.join(temp_dir, "final.jpg")
-    bpy.ops.render.render(write_still=True)
+    if export:
+        bpy.ops.render.render(write_still=True)
     return
 
 def numpyMasks():
@@ -270,7 +270,7 @@ def stackMasks(masks:list) -> np.ndarray:
         out = np.where(mask>0, mask, out) #keep the value that comes in first if two overlap
     return out
 
-pieces = whatToRender()[0:5]
+pieces = random.sample(whatToRender(),6)
 list(map(lambda x: x.makeLDR(), pieces))
 print(pieces)
 renderOneIteration(pieces, os.path.join(bg_imgs_dir,"bg2.jpg"), pos)

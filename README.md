@@ -9,3 +9,8 @@ the images are rendered in blender with [this plugin](https://github.com/TobyLob
 
 `./run.sh`
 
+## todo
+- lego logo on studs
+- many of the pieces in the db are too big. need filter to remove those when building the db
+    - I think the BL api contains dimensions
+- output np array and pics in training-ready format
