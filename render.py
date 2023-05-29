@@ -19,6 +19,9 @@ out_dir = "renders/"
 bg_imgs_dir = "bg_imgs/"
 px_per_mm = 10 #for bg img
 pos = (0,5,5,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
+temp_dir = "temp"
+if not os.path.exists(temp_dir):
+    os.mkdir(temp_dir)
 
 def whatToRender() -> list:
     outs = []
@@ -76,98 +79,136 @@ def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
         piece.select_set(True)
         bpy.context.view_layer.objects.active = piece
         bpy.ops.rigidbody.object_add()
-
-    #delete everything in the scene
-    modeObj()
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete()
-    
-    #import background image and scale by cm per pixel
-    deselect()
-    bpy.ops.import_image.to_plane(files=[{"name":os.path.basename(bg_img_path)}],
-                                    directory=os.path.dirname(bg_img_path), align_axis='Z+',
-                                    relative=False)
-    img_plane = bpy.context.active_object
-    img_plane.select_set(True)
-    bpy.context.view_layer.objects.active = img_plane
-    bpy.ops.rigidbody.object_add()
-    img_plane.rigid_body.type = "PASSIVE"
-    deselect()
-    
-    #scale img according to size of piece
-    img = Image.open(bg_img_path)
-    img_w, img_h = img.size
-    mm_per_bu = 1000 #blender units
-    new_w = img_w / px_per_mm / mm_per_bu
-    new_h = img_h / px_per_mm / mm_per_bu
-    img_plane.scale.x = new_w/2
-    img_plane.scale.y = new_h/2
-    img_plane.scale *= 25 #the bricks are 25x too big but physics is wrong if you scale them down 
-    
-    planes = []
-    for i in range(4):
-        deselect()
-        bpy.ops.mesh.primitive_plane_add(location=(0, 0, 0))
-        plane = bpy.context.object
-        dim = max(img_plane.dimensions[0], img_plane.dimensions[1])
-        plane.scale = (dim,10,1)
-        plane.select_set(True)
-        bpy.ops.rigidbody.object_add()
-        plane.rigid_body.type = "PASSIVE"
-        plane.rigid_body.collision_shape = "MESH"
-        #make invisible in render
-        plane.hide_render = True
-        plane.hide_viewport = True
-        planes.append(plane)
         
-    planes[0].rotation_euler = (pi/2,0,0)
-    planes[1].rotation_euler = (pi/2,0,0)
-    planes[2].rotation_euler = (pi/2,0,pi/2)
-    planes[3].rotation_euler = (pi/2,0,pi/2)
+        return piece
     
+    def hide(obj):
+        obj.hide_render = True
+        obj.hide_viewport = True
+        
+    def show(obj):
+        obj.hide_render = False
+        obj.hide_viewport = False
+        
+    def setupCam():
+        deselect()
+        bpy.ops.object.camera_add()
+        cam = bpy.context.object
+        bpy.context.scene.camera = cam
+        cam = bpy.data.scenes["Scene"].camera
+        return cam
+    
+    def moveCam(cam, pos):
+        cam_pos = pos[:-3]
+        cam_rot = pos[3:]
+        cam.rotation_mode = "XYZ"
+        cam.location = cam_pos
+        looking_at = Vector((0.0, 0.0, 0.0))
+        direc = looking_at - cam.location
+        cam.rotation_euler = direc.to_track_quat('-Z', 'Y').to_euler()
+        #cam specs
+        cam.data.lens = 35
+        cam.data.sensor_width = 36
+        
+    def sceneSetup():
+        #delete everything in the scene
+        modeObj()
+        bpy.ops.object.select_all(action="SELECT")
+        bpy.ops.object.delete()
+        
+        #no other lights and pure black background
+        bpy.context.scene.world.node_tree.nodes['Background'].inputs[1].default_value = 0
+    
+    def setImgPlane():
+        #import background image and scale by cm per pixel
+        deselect()
+        bpy.ops.import_image.to_plane(files=[{"name":os.path.basename(bg_img_path)}],
+                                        directory=os.path.dirname(bg_img_path), align_axis='Z+',
+                                        relative=False)
+        img_plane = bpy.context.active_object
+        img_plane.select_set(True)
+        bpy.context.view_layer.objects.active = img_plane
+        bpy.ops.rigidbody.object_add()
+        img_plane.rigid_body.type = "PASSIVE"
+        deselect()
+        return img_plane
+        
+    def setContainingWalls():
+        #scale img according to size of piece
+        img = Image.open(bg_img_path)
+        img_w, img_h = img.size
+        mm_per_bu = 1000 #blender units
+        new_w = img_w / px_per_mm / mm_per_bu
+        new_h = img_h / px_per_mm / mm_per_bu
+        img_plane.scale.x = new_w/2
+        img_plane.scale.y = new_h/2
+        img_plane.scale *= 25 #the bricks are 25x too big but physics is wrong if you scale them down 
+        
+        planes = []
+        for i in range(4):
+            deselect()
+            bpy.ops.mesh.primitive_plane_add(location=(0, 0, 0))
+            plane = bpy.context.object
+            dim = max(img_plane.dimensions[0], img_plane.dimensions[1])
+            plane.scale = (dim,10,1)
+            plane.select_set(True)
+            bpy.ops.rigidbody.object_add()
+            plane.rigid_body.type = "PASSIVE"
+            plane.rigid_body.collision_shape = "MESH"
+            #make invisible in render
+            plane.hide_render = True
+            plane.hide_viewport = True
+            planes.append(plane)
+            
+        planes[0].rotation_euler = (pi/2,0,0)
+        planes[1].rotation_euler = (pi/2,0,0)
+        planes[2].rotation_euler = (pi/2,0,pi/2)
+        planes[3].rotation_euler = (pi/2,0,pi/2)
+
+        planes[0].location[1] += range_y
+        planes[1].location[1] -= range_y
+        planes[2].location[0] += range_x
+        planes[3].location[0] -= range_x
+        
+    def setLight():
+        deselect()
+        bpy.ops.object.light_add(type="POINT", location=pos[:-3])
+        light = bpy.context.object
+        light.data.energy = 1000
+        looking_at = Vector((0.0, 0.0, 0.0))
+        direc = looking_at - Vector(pos[:-3])
+        light.rotation_euler = direc.to_track_quat('-Z', 'Y').to_euler()    
+        
+    cam = sceneSetup()
+    img_plane = setImgPlane()
     range_x = img_plane.dimensions[0]/2
     range_y = img_plane.dimensions[1]/2
-    planes[0].location[1] += range_y
-    planes[1].location[1] -= range_y
-    planes[2].location[0] += range_x
-    planes[3].location[0] -= range_x
+    setContainingWalls()
+    setLight()
 
-    #set up camera
-    cam_pos = pos[:-3]
-    cam_rot = pos[3:]
-    deselect()
-    bpy.ops.object.camera_add(location=cam_pos)
-    cam = bpy.context.object
-    cam.rotation_mode = "XYZ"
-    looking_at = Vector((0.0, 0.0, 0.0))
-    direc = looking_at - cam.location
-    cam.rotation_euler = direc.to_track_quat('-Z', 'Y').to_euler()
-    
-    #cam specs
-    cam.data.lens = 35
-    cam.data.sensor_width = 36
-    
-    #lights
-    deselect()
-    bpy.ops.object.light_add(type="POINT", location=cam_pos)
-    light = bpy.context.object
-    light.data.energy = 1000
-    looking_at = Vector((0.0, 0.0, 0.0))
-    direc = looking_at - cam.location
-    light.rotation_euler = direc.to_track_quat('-Z', 'Y').to_euler()
-
-    for piece in pieces:
+    for i,piece in enumerate(pieces):
         init_loc = (random.uniform(-range_x, range_x), random.uniform(-range_y,range_y), 2)
-        makePiece(piece, where=init_loc)
-        
-    #print(f"Initial position: {piece.location}")
-    #physics sim needs to set through every frame no matter what
-    #this loop avoids using regular playback in favor of just getting
-    #to the last frame asap
+        pieces[i] = makePiece(piece, where=init_loc)
+    
+    #step to end of scene. physics sim needs to step through all frames
     bpy.context.scene.frame_end = 75
     list(map(bpy.context.scene.frame_set, range(1, 75+1)))
-    #print(f"Final position: {piece.matrix_world.translation}")
     
+    cam = setupCam()
+    moveCam(cam, pos)
+    bpy.context.scene.cycles.samples = 50
+    bpy.context.scene.render.resolution_percentage = 50
+    for i,piece in enumerate(pieces):
+        hide(img_plane)
+        list(map(hide, pieces))
+        show(piece)
+        bpy.context.scene.render.filepath=os.path.join(temp_dir, f"{i}.jpg")
+        bpy.ops.render.render(write_still=True)
+    
+    show(img_plane)
+    list(map(show, pieces))
+    bpy.context.scene.render.filepath=os.path.join(temp_dir, "final.jpg")
+    bpy.ops.render.render(write_still=True)
     return
 
 ids = ["3001", "3002", "3003", "3004", "3005"]
