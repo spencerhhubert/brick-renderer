@@ -1,6 +1,6 @@
 # brick-renderer
 
-a tool to render pics of lego pieces from the [ldraw part library](https://www.ldraw.org/parts/latest-parts.html) to train a classifcation model
+a tool to render pics of lego® pieces from the [ldraw part library](https://www.ldraw.org/parts/latest-parts.html) to train a classifcation model for the [nexus](https://github.com/spencerhhubert/nexus), a lego® sorting machine
 
 the images are rendered in blender with [this plugin](https://github.com/TobyLobster/ImportLDraw) to import the pieces
 
