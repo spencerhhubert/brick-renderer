@@ -6,6 +6,7 @@ import random
 import bpy
 import sqlite3 as sql
 from mathutils import Vector
+from math import pi
 #install to blender python instance
 #/Applications/Blender.app/Contents/Resources/2.92/python/bin/python3.7m -m pip install pillow
 from PIL import Image
