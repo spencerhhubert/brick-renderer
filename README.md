@@ -6,6 +6,8 @@ the images are rendered in blender with [this plugin](https://github.com/TobyLob
 
 ![example rendered pic of ldraw pieces](https://raw.githubusercontent.com/spencerhhubert/brick-renderer/main/assets/example01.jpg)
 
+how long will it take 3090 to render 10m images?
+
 ## run
 `chmod +x run.sh`
 
