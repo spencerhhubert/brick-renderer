@@ -20,44 +20,71 @@ out_dir = "renders/"
 bg_imgs_dir = "bg_imgs/"
 px_per_mm = 10 #for bg img
 pos = (0,5,5,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
-temp_dir = "temp"
+temp_dir = "tmp"
 if not os.path.exists(temp_dir):
     os.mkdir(temp_dir)
 
-def whatToRender() -> list:
-    outs = []
-    c.execute("SELECT * FROM kinds")
-    for i,row in enumerate(c.fetchall()):
-        id = row[0]
-        alt_ids = json.loads(row[3])
-        dats = list(filter(lambda x: x in ldraw_kinds, alt_ids))
-        if len(dats) < 1:
-            continue
-        dats.sort(key=lambda x: len(x))
-        #assume the dat we want is the one with the shortest name
-        #I any of them would work
-        dat_path = os.path.join(ldraw_dir,dats[0]+".dat")
-        outs.append((id, dat_path, os.path.join(out_dir, id)))
-    return outs
+if not os.path.exists(os.path.join(temp_dir, "ldrs")):
+    os.mkdir(os.path.join(temp_dir, "ldrs"))
+
+class Piece:
+    def __init__(self, id:str, ml_id:int, color:str, dat_path:str):
+        self.id = id
+        self.ml_id = ml_id
+        self.dat_path = dat_path
+        self.color = random.randint(1,16)
+        self.ldr_path = os.path.join(temp_dir, "ldrs", id + ".ldr")
+
+    def makeLDR(self):
+        with open(self.ldr_path, "w") as f:
+            f.write(f"1 {self.color} 0 0 0 1 0 0 0 1 0 0 0 1 {os.path.basename(self.dat_path)}")
+
+    def __repr__(self):
+        return f"Piece(id={self.id},\nml_id={self.ml_id},\ncolor={self.color},\ndat_path={self.dat_path},\nld_path={self.ldr_path})\n\n"
 
 def randomColorCodes(num:int) -> list:
     c.execute("SELECT code FROM colors ORDER BY RANDOM() LIMIT ?", (num,))
     return [i[0] for i in c.fetchall()]
 
-def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
-    
+def makePiece(row):
+    id = row[0]
+    alt_ids = json.loads(row[3])
+    dats = filter(lambda x: x in ldraw_kinds, alt_ids)
+    dats = list(filter(lambda x: x != "", dats))
+    if len(dats) < 1:
+        return None
+    dats.sort(key=lambda x: len(x))
+    #assume the dat we want is the one with the shortest name
+    #I any of them would work
+    dat_path = os.path.join(ldraw_dir,dats[0]+".dat")
+    ml_id = int(c.execute("SELECT ml_id FROM kinds WHERE id = ?",(id,)).fetchone()[0])
+    return Piece(id, ml_id, randomColorCodes(1)[0], dat_path)
+
+def whatToRender() -> list:
+    c.execute("SELECT * FROM kinds")
+    out = []
+    for i,row in enumerate(c.fetchall()):
+        piece = makePiece(row)
+        if piece is not None:
+            out.append(piece)
+        if i == 5:
+            break
+    return out
+
+#output is files written to temp_dir
+def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
     def modeObj():
         if bpy.context.object.mode == "EDIT":
             bpy.ops.object.mode_set(mode="OBJECT")
     def deselect():
         bpy.ops.object.select_all(action="DESELECT")
         
-    def makePiece(piece:tuple, where:tuple):
-        kind_id, color, dat_path = piece
+    def spawnPiece(piece:Piece, where:tuple):
+        kind_id, color, ldr_path = piece.id, piece.color, piece.ldr_path
         
         #messiness here deals with imports of >1 of the same piece kind
         before_import = set(obj.name for obj in bpy.data.objects)
-        bpy.ops.import_scene.importldraw(filepath=dat_path)
+        bpy.ops.import_scene.importldraw(filepath=ldr_path)
         after_import = set(obj.name for obj in bpy.data.objects)
         new_objs = after_import - before_import
         piece = None
@@ -66,21 +93,22 @@ def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
             if obj_name == "LegoGroundPlane":
                 obj.select_set(True)
                 bpy.ops.object.delete()
+            elif ".ldr" in obj_name:
+                continue
             else:
                 piece = obj
 
         init_rot = (random.uniform(0, 2*pi), random.uniform(0, 2*pi), random.uniform(0, 2*pi))
         init_rot = (0,0,0)
-        print("where", where)
         piece.location = where
         piece.rotation_euler = init_rot
         
         #make piece a rigid body for physics sim
         deselect()
         piece.select_set(True)
+        print(piece)
         bpy.context.view_layer.objects.active = piece
         bpy.ops.rigidbody.object_add()
-        
         return piece
     
     def hide(obj):
@@ -189,7 +217,7 @@ def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
 
     for i,piece in enumerate(pieces):
         init_loc = (random.uniform(-range_x, range_x), random.uniform(-range_y,range_y), 2)
-        pieces[i] = makePiece(piece, where=init_loc)
+        pieces[i] = spawnPiece(piece, where=init_loc)
     
     #step to end of scene. physics sim needs to step through all frames
     bpy.context.scene.frame_end = 75
@@ -212,11 +240,13 @@ def renderOneImg(pieces:list, bg_img_path:str, pos:tuple, out_path:str):
     bpy.ops.render.render(write_still=True)
     return
 
-ids = ["3001", "3002", "3003", "3004", "3005"]
-pieces = [("3001", "0", os.path.join(ldraw_dir,"3001.dat")), ("3005", "0", os.path.join(ldraw_dir,"3005.dat"))]
-pieces = [(id, "0", os.path.join(ldraw_dir, f"{id}.dat")) for id in ids]
+def numpyMasks(pieces:list):
+    return None
 
-renderOneImg(pieces, os.path.join(bg_imgs_dir,"bg2.jpg"), pos, out_dir)
+pieces = whatToRender()[0:5]
+list(map(lambda x: x.makeLDR(), pieces))
+print(pieces)
+renderOneIteration(pieces, os.path.join(bg_imgs_dir,"bg2.jpg"), pos)
        
 def massRender(imgs_per:int):
     kinds = whatToRender()
