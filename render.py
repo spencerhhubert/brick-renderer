@@ -7,6 +7,7 @@ import bpy
 import sqlite3 as sql
 from mathutils import Vector
 from math import pi
+import numpy as np
 #install to blender python instance
 #/Applications/Blender.app/Contents/Resources/2.92/python/bin/python3.7m -m pip install pillow
 from PIL import Image
@@ -20,12 +21,14 @@ out_dir = "renders/"
 bg_imgs_dir = "bg_imgs/"
 px_per_mm = 10 #for bg img
 pos = (0,5,5,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
+
 temp_dir = "tmp"
 if not os.path.exists(temp_dir):
     os.mkdir(temp_dir)
 
-if not os.path.exists(os.path.join(temp_dir, "ldrs")):
-    os.mkdir(os.path.join(temp_dir, "ldrs"))
+def wipeTmp():
+    for f in os.listdir(temp_dir):
+        os.remove(os.path.join(temp_dir,f))
 
 class Piece:
     def __init__(self, id:str, ml_id:int, color:str, dat_path:str):
@@ -33,6 +36,8 @@ class Piece:
         self.ml_id = ml_id
         self.dat_path = dat_path
         self.color = random.randint(1,16)
+        if not os.path.exists(os.path.join(temp_dir, "ldrs")):
+            os.mkdir(os.path.join(temp_dir, "ldrs"))
         self.ldr_path = os.path.join(temp_dir, "ldrs", id + ".ldr")
 
     def makeLDR(self):
@@ -80,7 +85,7 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
         bpy.ops.object.select_all(action="DESELECT")
         
     def spawnPiece(piece:Piece, where:tuple):
-        kind_id, color, ldr_path = piece.id, piece.color, piece.ldr_path
+        kind_id, ml_id, ldr_path = piece.id, piece.ml_id, piece.ldr_path
         
         #messiness here deals with imports of >1 of the same piece kind
         before_import = set(obj.name for obj in bpy.data.objects)
@@ -97,6 +102,8 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
                 continue
             else:
                 piece = obj
+
+        piece["ml_id"] = ml_id
 
         init_rot = (random.uniform(0, 2*pi), random.uniform(0, 2*pi), random.uniform(0, 2*pi))
         init_rot = (0,0,0)
@@ -231,7 +238,10 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
         hide(img_plane)
         list(map(hide, pieces))
         show(piece)
-        bpy.context.scene.render.filepath=os.path.join(temp_dir, f"{i}.jpg")
+        if not os.path.exists(os.path.join(temp_dir, "masks")):
+            os.makedirs(os.path.join(temp_dir, "masks"))
+        bpy.context.scene.render.image_settings.file_format = "JPEG"
+        bpy.context.scene.render.filepath=os.path.join(temp_dir, "masks", f"{piece['ml_id']}.jpg")
         bpy.ops.render.render(write_still=True)
     
     show(img_plane)
@@ -240,13 +250,32 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
     bpy.ops.render.render(write_still=True)
     return
 
-def numpyMasks(pieces:list):
-    return None
+def numpyMasks():
+    out = []
+    for img in os.listdir(os.path.join(temp_dir, "masks")):
+        if not (img.endswith(".jpg") or img.endswith(".png")):
+            continue
+        ml_id = img.split(".")[0]
+        arr = np.array(Image.open(os.path.join(temp_dir, "masks", img)))
+        arr = np.mean(arr, axis=2)
+        thresh = 2
+        arr = np.where(arr>thresh, int(ml_id), 0)
+        out.append(arr)
+    return out
+
+def stackMasks(masks:list) -> np.ndarray:
+    out = np.zeros(masks[0].shape)
+    for mask in masks:
+        out = np.where(mask>0, mask, out) #keep the value that comes in first if two overlap
+    return out
 
 pieces = whatToRender()[0:5]
 list(map(lambda x: x.makeLDR(), pieces))
 print(pieces)
 renderOneIteration(pieces, os.path.join(bg_imgs_dir,"bg2.jpg"), pos)
+masks = numpyMasks()
+stacked = stackMasks(masks)
+print(stacked)
        
 def massRender(imgs_per:int):
     kinds = whatToRender()
