@@ -4,6 +4,8 @@ a tool to render pics of lego pieces from the [ldraw part library](https://www.l
 
 the images are rendered in blender with [this plugin](https://github.com/TobyLobster/ImportLDraw) to import the pieces
 
+![example rendered pic of ldraw pieces](https://raw.githubusercontent.com/spencerhhubert/brick-renderer/main/assets/example01.jpg)
+
 ## run
 `chmod +x run.sh`
 
