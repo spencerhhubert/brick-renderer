@@ -106,7 +106,6 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
         piece["ml_id"] = ml_id
 
         init_rot = (random.uniform(0, 2*pi), random.uniform(0, 2*pi), random.uniform(0, 2*pi))
-        init_rot = (0,0,0)
         piece.location = where
         piece.rotation_euler = init_rot
         
@@ -168,8 +167,8 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
         img_plane.rigid_body.type = "PASSIVE"
         deselect()
         return img_plane
-        
-    def setContainingWalls():
+
+    def scaleImgPlane():
         #scale img according to size of piece
         img = Image.open(bg_img_path)
         img_w, img_h = img.size
@@ -180,6 +179,7 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
         img_plane.scale.y = new_h/2
         img_plane.scale *= 25 #the bricks are 25x too big but physics is wrong if you scale them down 
         
+    def setContainingWalls():
         planes = []
         for i in range(4):
             deselect()
@@ -201,10 +201,10 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
         planes[2].rotation_euler = (pi/2,0,pi/2)
         planes[3].rotation_euler = (pi/2,0,pi/2)
 
-        planes[0].location[1] += range_y
-        planes[1].location[1] -= range_y
-        planes[2].location[0] += range_x
-        planes[3].location[0] -= range_x
+        planes[0].location[1] += img_plane.dimensions[1]/2
+        planes[1].location[1] -= img_plane.dimensions[1]/2
+        planes[2].location[0] += img_plane.dimensions[0]/2
+        planes[3].location[0] -= img_plane.dimensions[0]/2
         
     def setLight():
         deselect()
@@ -217,13 +217,14 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple):
         
     cam = sceneSetup()
     img_plane = setImgPlane()
-    range_x = img_plane.dimensions[0]/2
-    range_y = img_plane.dimensions[1]/2
+    scaleImgPlane()
     setContainingWalls()
     setLight()
 
+    range_x = img_plane.dimensions[0]/2 * 0.9
+    range_y = img_plane.dimensions[1]/2 * 0.9
     for i,piece in enumerate(pieces):
-        init_loc = (random.uniform(-range_x, range_x), random.uniform(-range_y,range_y), 2)
+        init_loc = (random.uniform(-range_x, range_x), random.uniform(-range_y,range_y), 5)
         pieces[i] = spawnPiece(piece, where=init_loc)
     
     #step to end of scene. physics sim needs to step through all frames
