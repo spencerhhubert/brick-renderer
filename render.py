@@ -3,8 +3,11 @@
 
 import sys
 import os
-site_packages_path = os.environ["SITE_PACKAGES_PATH"]
-sys.path.append(site_packages_path)
+try:
+    site_packages_path = os.environ["SITE_PACKAGES_PATH"]
+    sys.path.append(site_packages_path)
+except:
+    pass
 
 import json
 import random
@@ -13,8 +16,6 @@ import sqlite3 as sql
 from mathutils import Vector
 from math import pi
 import numpy as np
-#install to blender python instance
-#/Applications/Blender.app/Contents/Resources/2.92/python/bin/python3.7m -m pip install pillow
 from PIL import Image
 
 piece_db_path = "../nexus/databases/pieces.db"
