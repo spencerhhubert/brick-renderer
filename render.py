@@ -1,5 +1,13 @@
 #render script argument to blender
 #use blender -B -P render.py -- <args>
+
+import sys
+args = sys.argv
+if len(args) > 5:
+    site_packages_path = args[5]
+    print(site_packages_path)
+    sys.path.append(site_packages_path)
+
 import os
 import json
 import random
