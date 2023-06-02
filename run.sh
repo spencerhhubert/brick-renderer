@@ -5,8 +5,8 @@ OS=$(uname)
 if [ "$OS" = "Linux" ]; then
     echo "Detected Linux"
     python3 -m pip install --user -r requirements.txt
-    site_packages_path=$(python3 -c 'import site; print(site.getusersitepackages())')
-    blender -b -P render.py -- $site_packages_path
+    export SITE_PACKAGES_PATH=$(python3 -c 'import site; print(site.getusersitepackages())')
+    blender -b -P render.py
 elif [ "$OS" = "Darwin" ]; then
     echo "Detected Mac OS"
     python3 -m pip install --user -r requirements.txt
