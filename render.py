@@ -27,6 +27,9 @@ out_dir = "renders/"
 bg_imgs_dir = "bg_imgs/"
 px_per_mm = 14 #for bg img
 pos = (0,3,3,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
+#bricklink stupidly stores dimensions in studs and then leaves it as 0 when it's not like, a whole number.
+#the unit then changes when studs makes no sense
+max_dim_studs = 6
 
 temp_dir = "tmp"
 if not os.path.exists(temp_dir):
@@ -37,7 +40,7 @@ def wipeTmp():
         os.remove(os.path.join(temp_dir,f))
 
 class Piece:
-    def __init__(self, id:str, ml_id:int, color:str, dat_path:str):
+    def __init__(self, id:str, ml_id:int, color:str, dat_path:str, dims:[float]):
         self.id = id
         self.ml_id = ml_id
         self.dat_path = dat_path
@@ -45,10 +48,16 @@ class Piece:
         if not os.path.exists(os.path.join(temp_dir, "ldrs")):
             os.mkdir(os.path.join(temp_dir, "ldrs"))
         self.ldr_path = os.path.join(temp_dir, "ldrs", id + ".ldr")
+        self.dims = dims
 
     def makeLDR(self):
         with open(self.ldr_path, "w") as f:
             f.write(f"1 {self.color} 0 0 0 1 0 0 0 1 0 0 0 1 {os.path.basename(self.dat_path)}")
+
+    def keep(self):
+        checks = [any(list(map(lambda x: x > max_dim_studs, self.dims)))]
+        return any(checks)
+
 
     def __repr__(self):
         return f"Piece(id={self.id},\nml_id={self.ml_id},\ncolor={self.color},\ndat_path={self.dat_path},\nld_path={self.ldr_path})\n\n"
@@ -69,14 +78,16 @@ def makePiece(row):
     #I any of them would work
     dat_path = os.path.join(ldraw_dir,dats[0]+".dat")
     ml_id = int(c.execute("SELECT ml_id FROM kinds WHERE id = ?",(id,)).fetchone()[0])
-    return Piece(id, ml_id, randomColorCodes(1)[0], dat_path)
+    print(f"trying to load id {id} with ml_id {ml_id}")
+    dims = json.loads(row[5])
+    return Piece(id, ml_id, randomColorCodes(1)[0], dat_path, dims)
 
 def whatToRender() -> list:
     c.execute("SELECT * FROM kinds")
     out = []
     for i,row in enumerate(c.fetchall()):
         piece = makePiece(row)
-        if piece is not None:
+        if (piece is not None) and (piece.keep()):
             out.append(piece)
     return out
 
