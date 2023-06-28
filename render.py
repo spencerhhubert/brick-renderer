@@ -11,6 +11,7 @@ except:
 
 import json
 import random
+import time
 import bpy
 import sqlite3 as sql
 from mathutils import Vector
@@ -56,8 +57,8 @@ class Piece:
 
     def keep(self):
         checks = [any(list(map(lambda x: x > max_dim_studs, self.dims)))]
-        return any(checks)
-
+        checks += [sum(self.dims) == 0]
+        return not any(checks)
 
     def __repr__(self):
         return f"Piece(id={self.id},\nml_id={self.ml_id},\ncolor={self.color},\ndat_path={self.dat_path},\nld_path={self.ldr_path})\n\n"
@@ -92,7 +93,7 @@ def whatToRender() -> list:
     return out
 
 #output is files written to temp_dir
-def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple, export=True):
+def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple, export_path:str, export=True):
     def modeObj():
         if bpy.context.object.mode == "EDIT":
             bpy.ops.object.mode_set(mode="OBJECT")
@@ -254,27 +255,27 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple, export=True):
         hide(img_plane)
         list(map(hide, pieces))
         show(piece)
-        if not os.path.exists(os.path.join(temp_dir, "masks")):
-            os.makedirs(os.path.join(temp_dir, "masks"))
+        if not os.path.exists(os.path.join(export_path, "masks")):
+            os.makedirs(os.path.join(export_path, "masks"))
         bpy.context.scene.render.image_settings.file_format = "JPEG"
-        bpy.context.scene.render.filepath=os.path.join(temp_dir, "masks", f"{piece['ml_id']}.jpg")
+        bpy.context.scene.render.filepath=os.path.join(export_path, "masks", f"{piece['ml_id']}.jpg")
         if export:
             bpy.ops.render.render(write_still=True)
     
     show(img_plane)
     list(map(show, pieces))
-    bpy.context.scene.render.filepath=os.path.join(temp_dir, "final.jpg")
+    bpy.context.scene.render.filepath=os.path.join(export_path, "render.jpg")
     if export:
         bpy.ops.render.render(write_still=True)
     return
 
-def numpyMasks():
+def numpyMasks(export_path:str) -> list:
     out = []
-    for img in os.listdir(os.path.join(temp_dir, "masks")):
+    for img in os.listdir(os.path.join(export_path, "masks")):
         if not (img.endswith(".jpg") or img.endswith(".png")):
             continue
         ml_id = img.split(".")[0]
-        arr = np.array(Image.open(os.path.join(temp_dir, "masks", img)))
+        arr = np.array(Image.open(os.path.join(export_path, "masks", img)))
         arr = np.mean(arr, axis=2)
         thresh = 2
         arr = np.where(arr>thresh, int(ml_id), 0)
@@ -287,19 +288,22 @@ def stackMasks(masks:list) -> np.ndarray:
         out = np.where(mask>0, mask, out) #keep the value that comes in first if two overlap
     return out
 
-pieces = random.sample(whatToRender(),6)
-list(map(lambda x: x.makeLDR(), pieces))
-print(pieces)
-renderOneIteration(pieces, os.path.join(bg_imgs_dir,"bg2.jpg"), pos)
-masks = numpyMasks()
-stacked = stackMasks(masks)
-print(stacked)
-       
-def massRender(imgs_per:int):
+def saveNpMasks(stacked_masks:np.ndarray, export_path:str):
+    np.save(os.path.join(export_path, "mask.npy"), stacked_masks)
+
+def handleMasks(export_path:str):
+    masks = numpyMasks(export_path)
+    stacked_masks = stackMasks(masks)
+    saveNpMasks(stacked_masks, export_path)
+
+def massRender(n:int):
     kinds = whatToRender()
     bg_imgs = list(map(lambda x: os.path.join(bg_imgs_dir,x), os.listdir(bg_imgs_dir)))
-    for kind in kinds:
-        for i in range(imgs_per):
-            color = randomColorCodes(1)[0]
-            bg_img_path = random.choice(bg_imgs)
-            #renderOneImg(kind[0], color, kind[1], bg_img_path, pos, kind[2])
+    for i in range(n):
+        pieces = random.sample(kinds,5)
+        list(map(lambda x: x.makeLDR(), pieces))
+        export_path = os.path.join(out_dir, f"{time.time()}")
+        renderOneIteration(pieces, random.choice(bg_imgs), pos, export_path, True)
+        handleMasks(export_path)
+
+massRender(5)

@@ -19,8 +19,5 @@ how long will it take 3090 to render 10m images?
 
 ## todo
 - lego logo on studs
-- many of the pieces in the db are too big. need filter to remove those when building the db
-    - I think the BL api contains dimensions
-- output np array and pics in training-ready format
-- make look more real
+- more background pics
 - accurate colors
