@@ -18,6 +18,4 @@ how long will it take 3090 to render 10m images?
 `./run.sh`
 
 ## todo
-- lego logo on studs
 - more background pics
-- accurate colors

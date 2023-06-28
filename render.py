@@ -18,19 +18,36 @@ from mathutils import Vector
 from math import pi
 import numpy as np
 from PIL import Image
+import copy
 
 piece_db_path = "../nexus/databases/pieces.db"
 db = sql.connect(piece_db_path)
 c = db.cursor()
-ldraw_dir = "ldraw/parts/"
-ldraw_kinds = list(map(lambda x: x[:-4],os.listdir(ldraw_dir)))
+ldraw_dir = "ldraw/"
+ldraw_kinds = list(map(lambda x: x[:-4],os.listdir(os.path.join(ldraw_dir,"parts"))))
 out_dir = "renders/"
 bg_imgs_dir = "bg_imgs/"
 px_per_mm = 14 #for bg img
 pos = (0,3,3,0,0,0) #x,y,z,pitch,yaw,roll floor where piece lies relative to camera
-#bricklink stupidly stores dimensions in studs and then leaves it as 0 when it's not like, a whole number.
+#bricklink stores dimensions in studs and then leaves it as 0 when it's not like, a whole number.
 #the unit then changes when studs makes no sense
+#ugh
 max_dim_studs = 6
+
+def getLDrawColors():
+    colors = []
+    with open(os.path.join(ldraw_dir,"LDConfig.ldr")) as f:
+        lines = f.readlines()[29:]
+        for line in lines:
+            words = line.split()
+            if len(words) < 3 or words[2] != "LEGOID":
+                continue
+            no_go = ["Chrome", "Trans", "Glitter", "Glow_In_Dark", "Milky", "Metallic", "Opal", "Speckle", "Rubber", "Electric", "Magnet", "Main_Colour", "Edge_Colour"]
+            if any([w in words[5] for w in no_go]):
+                continue
+            colors.append(words[3])
+    return colors
+colors = getLDrawColors()
 
 temp_dir = "tmp"
 if not os.path.exists(temp_dir):
@@ -45,7 +62,7 @@ class Piece:
         self.id = id
         self.ml_id = ml_id
         self.dat_path = dat_path
-        self.color = random.randint(1,16)
+        self.color = color
         if not os.path.exists(os.path.join(temp_dir, "ldrs")):
             os.mkdir(os.path.join(temp_dir, "ldrs"))
         self.ldr_path = os.path.join(temp_dir, "ldrs", id + ".ldr")
@@ -81,7 +98,7 @@ def makePiece(row):
     ml_id = int(c.execute("SELECT ml_id FROM kinds WHERE id = ?",(id,)).fetchone()[0])
     print(f"trying to load id {id} with ml_id {ml_id}")
     dims = json.loads(row[5])
-    return Piece(id, ml_id, randomColorCodes(1)[0], dat_path, dims)
+    return Piece(id, ml_id, random.choice(colors), dat_path, dims)
 
 def whatToRender() -> list:
     c.execute("SELECT * FROM kinds")
@@ -105,7 +122,7 @@ def renderOneIteration(pieces:list, bg_img_path:str, pos:tuple, export_path:str,
         
         #messiness here deals with imports of >1 of the same piece kind
         before_import = set(obj.name for obj in bpy.data.objects)
-        bpy.ops.import_scene.importldraw(filepath=ldr_path)
+        bpy.ops.import_scene.importldraw(filepath=ldr_path, useLogoStuds=True)
         after_import = set(obj.name for obj in bpy.data.objects)
         new_objs = after_import - before_import
         piece = None
@@ -296,14 +313,23 @@ def handleMasks(export_path:str):
     stacked_masks = stackMasks(masks)
     saveNpMasks(stacked_masks, export_path)
 
+def saveColorMap(pieces, export_path):
+    colorMap = {}
+    for piece in pieces:
+        colorMap[piece.ml_id] = piece.color
+    with open(os.path.join(export_path, "colors.json"), "w") as f:
+        json.dump(colorMap, f)
+
 def massRender(n:int):
-    kinds = whatToRender()
+    all_pieces = whatToRender()
     bg_imgs = list(map(lambda x: os.path.join(bg_imgs_dir,x), os.listdir(bg_imgs_dir)))
     for i in range(n):
-        pieces = random.sample(kinds,5)
+        pieces = random.sample(all_pieces,5)
         list(map(lambda x: x.makeLDR(), pieces))
         export_path = os.path.join(out_dir, f"{time.time()}")
-        renderOneIteration(pieces, random.choice(bg_imgs), pos, export_path, True)
+        #blender uses special python which references original objects and edits them. need to deep copy
+        renderOneIteration(copy.deepcopy(pieces), random.choice(bg_imgs), pos, export_path, True)
         handleMasks(export_path)
+        saveColorMap(pieces, export_path)
 
 massRender(5)
