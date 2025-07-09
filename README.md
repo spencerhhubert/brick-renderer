@@ -10,7 +10,7 @@ the images are rendered in blender with [this plugin](https://github.com/TobyLob
 ## real pic example
 <img src="https://raw.githubusercontent.com/spencerhhubert/brick-renderer/main/assets/real_example01.jpg" width="500">
 
-how long will it take 3090 to render 10m images?
+how long will it take TWO 3090s to render 10m images?
 
 ## run
 `chmod +x run.sh`
